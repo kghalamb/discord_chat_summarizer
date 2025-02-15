@@ -1,7 +1,9 @@
 import discord
 import os
+from transformers import pipeline
 
 
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 TOKEN = "MTM0MDI0Mjg0MjkwMzM4NDA4Ng.GJi71f.BYMCp7PI9gdxNDrEnSoQOthwsqXlKXTANdPo80"
 
 intents = discord.Intents.default()
@@ -21,24 +23,29 @@ async def on_message(message):
         return  # Ignore own messages
 
     if message.content.startswith("!summarize"):
-        channel = message.channel
-        messages = []
-        
-        async for msg in channel.history(limit=50):  # Adjust limit as needed
-            if message.author != client.user:
-                messages.append(msg.content)
+        try:
+            num_messages = 50#int(message.content.split()[1]) if len(message.content.split()) > 1 else 5
+            messages = []
+            async for msg in message.channel.history(limit=num_messages):
+                if msg.author != client.user:
+                    messages.append(msg)  # Append each message to the list
+                else: num_messages += 1
+            summary = summarize_text(messages)
+            await message.channel.send(f"Summary: {summary}")
+        except Exception as e:
+            await message.channel.send(f"Error Procesing Request: {e}")
 
-        print(f"Messages: {messages}")
-        full_text = "\n".join(messages)
-        summary = summarize_text(full_text)  # Call NLP function (to be implemented)
-        
-        await channel.send(f"**Summary:**\n{summary}")
     elif message.content.startswith("!help"):
-        await message.channel.send("Usage: `!summarize` to summarize the last 50 messages in the channel.")
+        await message.channel.send("Usage: `!summarize` to summarize the last X messages in the channel.")
+    
     elif message.content.startswith("!ping"):
         await message.channel.send("Pong!")
 
-def summarize_text(text):
-    return "Summary function not implemented yet!"
+
+
+def summarize_text(messages):
+    combined_content = ' '.join([msg.content for msg in messages])
+    summary = summarizer(combined_content, max_length=100, min_length=5, do_sample=False)
+    return summary[0]['summary_text']
 
 client.run(TOKEN)
